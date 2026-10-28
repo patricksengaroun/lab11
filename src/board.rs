@@ -43,7 +43,17 @@ pub enum CoordError {
 // Study DataError in data.rs: it is a finished example of this impl.
 impl fmt::Display for CoordError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TODO: {self:?}")
+        match self {
+            CoordError::BadFormat => {
+                write!(f, "type a column letter and a row number, like B7")
+            }
+            CoordError::ColumnOutOfRange(col) => {
+                write!(f, "column {} is off the board (A-J)", col)
+            }
+            CoordError::RowOutOfRange(row) => {
+                write!(f, "row {} is off the board (1-10)", row)
+            }
+        }
     }
 }
 
@@ -53,7 +63,6 @@ pub enum PlaceError {
     OutOfBounds,
     Overlap,
 }
-
 // Why a whole fleet could not be placed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FleetError {
