@@ -37,7 +37,24 @@ pub enum ShipLineError {
 // Use MIN_SHIP and MAX_SHIP in the message instead of typing 2 and 5.
 impl fmt::Display for ShipLineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TODO: {self:?}")
+        match self {
+            Self::MissingComma => write!(
+                f, 
+                "The configuration format is incorrect. Ensure there is exactly one comma separating the name and length."
+            ),
+            Self::EmptyName => write!(
+                f, 
+                "The ship name cannot be blank; please provide a valid name before the comma."
+            ),
+            Self::BadLength(text) => write!(
+                f, 
+                "'{text}' is not a valid number. Please provide a valid integer for the ship length."
+            ),
+            Self::LengthOutOfRange(value) => write!(
+                f, 
+                "The length of {value} is invalid; it must be between 2 and 5."
+            ),
+        }
     }
 }
 
@@ -133,21 +150,29 @@ pub fn sort_scores_desc(records: &mut Vec<ScoreRecord>) {
 // that matches the problem: MissingComma (not exactly one comma), EmptyName,
 // BadLength(the text that did not parse), LengthOutOfRange(the number).
 pub fn parse_ship_line(line: &str) -> Result<ShipSpec, ShipLineError> {
-    let parts: Vec<&str> = line.trim().split(',').collect();
+    let trimmed = line.trim();
+    
+    let parts: Vec<&str> = trimmed.split(',').collect();
+
     if parts.len() != 2 {
         return Err(ShipLineError::MissingComma);
     }
+
     let name = parts[0].trim();
+    let length_str = parts[1].trim();
+
     if name.is_empty() {
-        return Err(ShipLineError::MissingComma);
+        return Err(ShipLineError::EmptyName);
     }
-    let length = match parts[1].trim().parse::<usize>() {
-        Ok(n) => n,
-        Err(_) => return Err(ShipLineError::MissingComma),
-    };
-    if length < MIN_SHIP || length > MAX_SHIP {
-        return Err(ShipLineError::MissingComma);
+
+    let length = length_str
+        .parse::<usize>()
+        .map_err(|_| ShipLineError::BadLength(length_str.to_string()))?;
+
+    if !(2..=5).contains(&length) {
+        return Err(ShipLineError::LengthOutOfRange(length));
     }
+
     Ok(ShipSpec {
         name: name.to_string(),
         length,
