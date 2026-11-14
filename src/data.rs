@@ -23,7 +23,6 @@ pub struct ScoreRecord {
 
 // ---- Error types ----
 
-// Why one line of fleet.txt was rejected.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShipLineError {
     MissingComma,
@@ -32,9 +31,6 @@ pub enum ShipLineError {
     LengthOutOfRange(usize),
 }
 
-// TODO (Task 3): one sentence per variant, written so main can print
-// "data/fleet.txt line 10: <your sentence>". Example: "has length 1, outside 2-5".
-// Use MIN_SHIP and MAX_SHIP in the message instead of typing 2 and 5.
 impl fmt::Display for ShipLineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -45,7 +41,7 @@ impl fmt::Display for ShipLineError {
         }
     }
 }
-// Why the text of a board file was rejected. Line numbers are 1-based file lines.
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum BoardError {
     WrongRowCount(usize),
@@ -53,8 +49,6 @@ pub enum BoardError {
     BadChar { line: usize, ch: char },
 }
 
-// TODO (Task 5): one sentence per variant. Include the line number and the
-// character or counts the variant carries, and use SIZE instead of typing 10.
 impl fmt::Display for BoardError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -74,7 +68,6 @@ impl fmt::Display for BoardError {
     }
 }
 
-// Why a data file could not be used. PROVIDED: study this as a template.
 #[derive(Debug)]
 pub enum DataError {
     Io(io::Error),
@@ -92,7 +85,6 @@ impl fmt::Display for DataError {
     }
 }
 
-// These two impls are what let `?` convert an error into a DataError.
 impl From<io::Error> for DataError {
     fn from(e: io::Error) -> DataError {
         DataError::Io(e)
@@ -105,15 +97,12 @@ impl From<BoardError> for DataError {
     }
 }
 
-// The fleet plus every line that was skipped: (1-based line number, why).
 #[derive(Debug)]
 pub struct FleetReport {
     pub fleet: Vec<ShipSpec>,
     pub skipped: Vec<(usize, ShipLineError)>,
 }
 
-// WORKED EXAMPLE (provided). One line of scores.txt looks like:  Ana,83
-// Returns None for any line that is not "name,number".
 pub fn parse_score(line: &str) -> Option<ScoreRecord> {
     let parts: Vec<&str> = line.trim().split(',').collect();
     if parts.len() != 2 {
@@ -132,7 +121,6 @@ pub fn parse_score(line: &str) -> Option<ScoreRecord> {
     }
 }
 
-// PROVIDED: sort highest score first (selection sort).
 pub fn sort_scores_desc(records: &mut Vec<ScoreRecord>) {
     for i in 0..records.len() {
         let mut best = i;
@@ -145,10 +133,6 @@ pub fn sort_scores_desc(records: &mut Vec<ScoreRecord>) {
     }
 }
 
-// One line of fleet.txt looks like:  Carrier,5
-// TODO (Task 3): every failure is MissingComma right now. Return the variant
-// that matches the problem: MissingComma (not exactly one comma), EmptyName,
-// BadLength(the text that did not parse), LengthOutOfRange(the number).
 pub fn parse_ship_line(line: &str) -> Result<ShipSpec, ShipLineError> {
     let trimmed = line.trim();
 
@@ -179,12 +163,6 @@ pub fn parse_ship_line(line: &str) -> Result<ShipSpec, ShipLineError> {
     })
 }
 
-// TODO (Task 4): this is still the Week 10 behavior wrapped in Ok. Change it so:
-//   - an unreadable file is Err(DataError::Io(..)): read with `?`, no match;
-//   - bad lines go into `skipped` as (1-based line number, error), with no
-//     eprintln! (main reports them);
-//   - a file with zero valid ships is Err(DataError::NoShips(path.to_string())).
-// Blank lines and '#' lines are skipped silently but still count for line numbers.
 pub fn load_fleet(path: &str) -> Result<FleetReport, DataError> {
     let contents = fs::read_to_string(path)?;
 
@@ -212,12 +190,6 @@ pub fn load_fleet(path: &str) -> Result<FleetReport, DataError> {
     Ok(FleetReport { fleet, skipped })
 }
 
-// Turn the text of a board file into a Board.
-// TODO (Task 5): every failure is WrongRowCount right now. Return
-// WrongRowWidth { line, found } for a row that is not SIZE characters wide, and
-// BadChar { line, ch } for any character other than '.' and 'S'. `line` is the
-// 1-based line number in the file, comments and blank lines included
-// (enumerate() starts at 0). WrongRowCount(n) carries how many rows were found.
 pub fn parse_board(text: &str) -> Result<Board, BoardError> {
     let mut board = new_board();
     let mut row_count = 0;
@@ -265,19 +237,12 @@ pub fn parse_board(text: &str) -> Result<Board, BoardError> {
     Ok(board)
 }
   
-// Read a board file.
-// TODO (Task 6): this works, but it is long. Rewrite the body as three lines
-// that use `?` twice, with no match: the From impls above do the conversion.
 pub fn load_board(path: &str) -> Result<Board, DataError> {
     let text = fs::read_to_string(path)?;
     let board = parse_board(&text)?;
     Ok(board)
 }
 
-// A missing file is normal on the first run: Ok with an empty Vec.
-// TODO (Task 7): right now every read error is treated as "missing". Return
-// Ok(empty) only when e.kind() == io::ErrorKind::NotFound. Any other error is
-// Err(DataError::Io(e)). Keep skipping score lines that parse_score rejects.
 pub fn load_scores(path: &str) -> Result<Vec<ScoreRecord>, DataError> {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
@@ -295,14 +260,9 @@ pub fn load_scores(path: &str) -> Result<Vec<ScoreRecord>, DataError> {
     Ok(records)
 }
 
-// Append "name,score" as one line, creating the file if needed.
-// Commas in the name are replaced with spaces so the line stays parseable.
-// TODO (Task 8): this works, but it is long. Rewrite it with `?` on the open and
-// on the writeln!, with no match.
 pub fn append_score(path: &str, record: &ScoreRecord) -> Result<(), DataError> {
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     let name = record.name.replace(',', " ");
     writeln!(file, "{},{}", name, record.score)?;
     Ok(())
-
 }
