@@ -304,4 +304,5 @@ pub fn append_score(path: &str, record: &ScoreRecord) -> Result<(), DataError> {
     let name = record.name.replace(',', " ");
     writeln!(file, "{},{}", name, record.score)?;
     Ok(())
+
 }
