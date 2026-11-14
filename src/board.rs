@@ -36,11 +36,6 @@ pub enum CoordError {
     RowOutOfRange(usize),
 }
 
-// TODO (Task 1): write one sentence per variant. Do not print the debug form.
-//   BadFormat            type a column letter and a row number, like B7
-//   ColumnOutOfRange('K') column K is off the board (A-J)
-//   RowOutOfRange(11)     row 11 is off the board (1-10)
-// Study DataError in data.rs: it is a finished example of this impl.
 impl fmt::Display for CoordError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -77,15 +72,6 @@ impl fmt::Display for FleetError {
     }
 }
 
-// True if a ship of this length starting at (row, col) stays on the board
-// and covers only water. TODO (Task 2): fold this into `place` and delete it.
-
-
-// Place a ship starting at (row, col).
-// TODO (Task 2): check the edge first and return Err(PlaceError::OutOfBounds);
-// then check for overlap and return Err(PlaceError::Overlap); only then change
-// the board. A failed call must leave the board untouched.
-// Right now every failure is reported as OutOfBounds.
 pub fn place(
     board: &mut Board,
     row: usize,
@@ -183,11 +169,6 @@ pub fn all_sunk(board: &Board) -> bool {
     count_cells(board, Cell::Ship) == 0
 }
 
-// "B7" -> Ok((6, 1)): letter is the column, number is the row (1-based).
-// TODO (Task 1): every failure is BadFormat right now. Return
-// ColumnOutOfRange(letter) when the column is past J (use the uppercase letter),
-// and RowOutOfRange(number) when the row is 0 or past 10. Check the column first.
-// Use a match on parse::<usize>(), not map_err.
 pub fn parse_coord(text: &str) -> Result<(usize, usize), CoordError> {
     let text = text.trim();
     let first = match text.chars().next() {
@@ -197,14 +178,23 @@ pub fn parse_coord(text: &str) -> Result<(usize, usize), CoordError> {
     if !first.is_ascii_alphabetic() {
         return Err(CoordError::BadFormat);
     }
+
+    let upper_col = first.to_ascii_uppercase();
+    let col = (upper_col as usize) - ('A' as usize);
+
     let row_number = match text[1..].trim().parse::<usize>() {
         Ok(n) => n,
         Err(_) => return Err(CoordError::BadFormat),
     };
-    let col = (first.to_ascii_uppercase() as usize) - ('A' as usize);
+
     if col >= SIZE || row_number < 1 || row_number > SIZE {
         return Err(CoordError::BadFormat);
     }
+
+    if row_number < 1 || row_number > SIZE {
+        return Err(CoordError::RowOutOfRange(row_number));
+    }
+
     Ok((row_number - 1, col))
 }
 
