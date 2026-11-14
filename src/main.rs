@@ -10,7 +10,7 @@ const PRACTICE_PATH: &str = "data/boards/practice.txt";
 const TOP_N: usize = 5;
 
 fn main() {
-    let report = data::load_fleet(FLEET_PATH).unwrap();
+    let report = match data::load_fleet(FLEET_PATH) {
         Ok(report) => {
              for (n, err) in &report.skipped {
                  eprintln!("{FLEET_PATH} line {n}: {err}");
@@ -51,7 +51,7 @@ fn main() {
 // Print the best scores, highest first, or a message if there are none.
 fn show_top_scores(n: usize) {
     println!("TOP {n}");
-    let mut records = data::load_scores(SCORES_PATH).unwrap();
+    let mut records = match data::load_scores(SCORES_PATH) {
         Ok(records) => records,
         Err(e) => {
             println!("  scores unavailable: {e}");
@@ -90,7 +90,7 @@ fn play_game(fleet: &[ShipSpec]) {
             if !name.is_empty() {
                 let record = ScoreRecord { name, score };
                 match data::append_score(SCORES_PATH, &record) {
-                    Ok(()) => println!("Score saved.");
+                    Ok(()) => println!("Score saved."),
                     Err(e) => println!("Could not save the score: {e}"),
                 }
             }
