@@ -284,12 +284,14 @@ pub fn load_scores(path: &str) -> Result<Vec<ScoreRecord>, DataError> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(DataError::Io(e)),
     };
+
     let mut records = Vec::new();
     for line in text.lines() {
         if let Some(record) = parse_score(line) {
             records.push(record);
         }
     }
+
     Ok(records)
 }
 
