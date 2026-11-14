@@ -58,9 +58,18 @@ pub enum BoardError {
 impl fmt::Display for BoardError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::WrongRowCount(count) => write!(f, "wrong row count: found {count}, expected {SIZE}"),
-            Self::WrongRowWidth { line, found } => write!(f, "line {line}: wrong row width, found {found} characters (expected {SIZE})"),
-            Self::BadChar { line, ch } => write!(f, "line {line}: invalid character '{ch}'"),
+            Self::WrongRowCount(count) => write!(
+                f,
+                "The board layout is invalid because it contains {count} rows, but exactly {SIZE} rows are required."
+            ),
+            Self::WrongRowWidth { line, found } => write!(
+                f,
+                "On file line {line}, the row width is {found} characters, but exactly {SIZE} characters are required."
+            ),
+            Self::BadChar { line, ch } => write!(
+                f,
+                "On line {line}, an invalid character '{ch}' was found; only '.' and 'S' are permitted."
+            ),
         }
     }
 }
@@ -210,14 +219,22 @@ pub fn load_fleet(path: &str) -> Result<FleetReport, DataError> {
 // 1-based line number in the file, comments and blank lines included
 // (enumerate() starts at 0). WrongRowCount(n) carries how many rows were found.
 pub fn parse_board(text: &str) -> Result<Board, BoardError> {
-    let mut valid_rows = Vec::new();
+    let mut board = new_board();
+    let mut row_count = 0;
 
     for (index, line) in text.lines().enumerate() {
         let line_number = index + 1;
         let trimmed = line.trim();
+
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
+
+        if row_count >= SIZE {
+            row_count += 1;
+            continue;
+        }
+
         let chars: Vec<char> = trimmed.chars().collect();
         if chars.len() != SIZE {
             return Err(BoardError::WrongRowWidth {
@@ -225,35 +242,29 @@ pub fn parse_board(text: &str) -> Result<Board, BoardError> {
                 found: chars.len(),
             });
         }
-        for &ch in &chars {
-            if ch != '.' && ch != 'S' {
-                return Err(BoardError::BadChar {
-                    line: line_number,
-                    ch,
-                });
+
+        for col in 0..SIZE {
+            match chars[col] {
+                '.' => board[row_count][col] = Cell::Water,
+                'S' => board[row_count][col] = Cell::Ship,
+                ch => {
+                    return Err(BoardError::BadChar {
+                        line: line_number,
+                        ch,
+                    })
+                }
             }
         }
-        valid_rows.push((line_number, chars));
+        row_count += 1;
     }
 
-    if valid_rows.len() != SIZE {
-        return Err(BoardError::WrongRowCount(valid_rows.len()));
-    }
-
-    let mut board = new_board();
-    for (r, (_, chars)) in valid_rows.into_iter().enumerate() {
-        for (c, ch) in chars.into_iter().enumerate() {
-            board[r][c] = match ch {
-                '.' => Cell::Water,
-                'S' => Cell::Ship,
-                _ => unreachable!(),
-            };
-        }
+    if row_count != SIZE {
+        return Err(BoardError::WrongRowCount(row_count));
     }
 
     Ok(board)
 }
-
+  
 // Read a board file.
 // TODO (Task 6): this works, but it is long. Rewrite the body as three lines
 // that use `?` twice, with no match: the From impls above do the conversion.
