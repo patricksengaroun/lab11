@@ -38,26 +38,13 @@ pub enum ShipLineError {
 impl fmt::Display for ShipLineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingComma => write!(
-                f, 
-                "The configuration format is incorrect. Ensure there is exactly one comma separating the name and length."
-            ),
-            Self::EmptyName => write!(
-                f, 
-                "The ship name cannot be blank; please provide a valid name before the comma."
-            ),
-            Self::BadLength(text) => write!(
-                f, 
-                "'{text}' is not a valid number. Please provide a valid integer for the ship length."
-            ),
-            Self::LengthOutOfRange(value) => write!(
-                f, 
-                "The length of {value} is invalid; it must be between 2 and 5."
-            ),
+            Self::MissingComma => write!(f, "is missing a comma"),
+            Self::EmptyName => write!(f, "has an empty name"),
+            Self::BadLength(text) => write!(f, "'{text}' is not a valid number"),
+            Self::LengthOutOfRange(value) => write!(f, "has length {value}, outside {MIN_SHIP}-{MAX_SHIP}"),
         }
     }
 }
-
 // Why the text of a board file was rejected. Line numbers are 1-based file lines.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BoardError {
@@ -70,7 +57,11 @@ pub enum BoardError {
 // character or counts the variant carries, and use SIZE instead of typing 10.
 impl fmt::Display for BoardError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TODO: {self:?}")
+        match self {
+            Self::WrongRowCount(count) => write!(f, "wrong row count: found {count}, expected {SIZE}"),
+            Self::WrongRowWidth { line, found } => write!(f, "line {line}: wrong row width, found {found} characters (expected {SIZE})"),
+            Self::BadChar { line, ch } => write!(f, "line {line}: invalid character '{ch}'"),
+        }
     }
 }
 
@@ -151,7 +142,7 @@ pub fn sort_scores_desc(records: &mut Vec<ScoreRecord>) {
 // BadLength(the text that did not parse), LengthOutOfRange(the number).
 pub fn parse_ship_line(line: &str) -> Result<ShipSpec, ShipLineError> {
     let trimmed = line.trim();
-    
+
     let parts: Vec<&str> = trimmed.split(',').collect();
 
     if parts.len() != 2 {
@@ -186,35 +177,30 @@ pub fn parse_ship_line(line: &str) -> Result<ShipSpec, ShipLineError> {
 //   - a file with zero valid ships is Err(DataError::NoShips(path.to_string())).
 // Blank lines and '#' lines are skipped silently but still count for line numbers.
 pub fn load_fleet(path: &str) -> Result<FleetReport, DataError> {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(e) => {
-            eprintln!("Could not read {path}: {e}");
-            return Ok(FleetReport {
-                fleet: Vec::new(),
-                skipped: Vec::new(),
-            });
-        }
-    };
+    let contents = fs::read_to_string(path)?;
+
     let mut fleet = Vec::new();
-    let mut skipped_count = 0;
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
+    let mut skipped = Vec::new();
+
+    for (index, line) in contents.lines().enumerate() {
+        let line_number = index + 1;
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        match parse_ship_line(line) {
+
+        match parse_ship_line(trimmed) {
             Ok(ship) => fleet.push(ship),
-            Err(_) => skipped_count += 1,
+            Err(err) => skipped.push((line_number, err)),
         }
     }
-    if skipped_count > 0 {
-        eprintln!("Skipped {skipped_count} invalid line(s) in {path}");
+
+    if fleet.is_empty() {
+        return Err(DataError::NoShips(path.to_string()));
     }
-    Ok(FleetReport {
-        fleet,
-        skipped: Vec::new(),
-    })
+
+    Ok(FleetReport { fleet, skipped })
 }
 
 // Turn the text of a board file into a Board.
@@ -224,32 +210,47 @@ pub fn load_fleet(path: &str) -> Result<FleetReport, DataError> {
 // 1-based line number in the file, comments and blank lines included
 // (enumerate() starts at 0). WrongRowCount(n) carries how many rows were found.
 pub fn parse_board(text: &str) -> Result<Board, BoardError> {
-    let mut board = new_board();
-    let mut row = 0;
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
+    let mut valid_rows = Vec::new();
+
+    for (index, line) in text.lines().enumerate() {
+        let line_number = index + 1;
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        if row >= SIZE {
-            return Err(BoardError::WrongRowCount(row));
-        }
-        let chars: Vec<char> = line.chars().collect();
+        let chars: Vec<char> = trimmed.chars().collect();
         if chars.len() != SIZE {
-            return Err(BoardError::WrongRowCount(row));
+            return Err(BoardError::WrongRowWidth {
+                line: line_number,
+                found: chars.len(),
+            });
         }
-        for col in 0..SIZE {
-            match chars[col] {
-                '.' => board[row][col] = Cell::Water,
-                'S' => board[row][col] = Cell::Ship,
-                _ => return Err(BoardError::WrongRowCount(row)),
+        for &ch in &chars {
+            if ch != '.' && ch != 'S' {
+                return Err(BoardError::BadChar {
+                    line: line_number,
+                    ch,
+                });
             }
         }
-        row += 1;
+        valid_rows.push((line_number, chars));
     }
-    if row != SIZE {
-        return Err(BoardError::WrongRowCount(row));
+
+    if valid_rows.len() != SIZE {
+        return Err(BoardError::WrongRowCount(valid_rows.len()));
     }
+
+    let mut board = new_board();
+    for (r, (_, chars)) in valid_rows.into_iter().enumerate() {
+        for (c, ch) in chars.into_iter().enumerate() {
+            board[r][c] = match ch {
+                '.' => Cell::Water,
+                'S' => Cell::Ship,
+                _ => unreachable!(),
+            };
+        }
+    }
+
     Ok(board)
 }
 
@@ -257,14 +258,9 @@ pub fn parse_board(text: &str) -> Result<Board, BoardError> {
 // TODO (Task 6): this works, but it is long. Rewrite the body as three lines
 // that use `?` twice, with no match: the From impls above do the conversion.
 pub fn load_board(path: &str) -> Result<Board, DataError> {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(e) => return Err(DataError::Io(e)),
-    };
-    match parse_board(&text) {
-        Ok(board) => Ok(board),
-        Err(e) => Err(DataError::Board(e)),
-    }
+    let text = fs::read_to_string(path)?;
+    let board = parse_board(&text)?;
+    Ok(board)
 }
 
 // A missing file is normal on the first run: Ok with an empty Vec.
@@ -274,7 +270,8 @@ pub fn load_board(path: &str) -> Result<Board, DataError> {
 pub fn load_scores(path: &str) -> Result<Vec<ScoreRecord>, DataError> {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
-        Err(_) => return Ok(Vec::new()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(DataError::Io(e)),
     };
     let mut records = Vec::new();
     for line in text.lines() {
@@ -290,13 +287,8 @@ pub fn load_scores(path: &str) -> Result<Vec<ScoreRecord>, DataError> {
 // TODO (Task 8): this works, but it is long. Rewrite it with `?` on the open and
 // on the writeln!, with no match.
 pub fn append_score(path: &str, record: &ScoreRecord) -> Result<(), DataError> {
-    let mut file = match OpenOptions::new().create(true).append(true).open(path) {
-        Ok(file) => file,
-        Err(e) => return Err(DataError::Io(e)),
-    };
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     let name = record.name.replace(',', " ");
-    match writeln!(file, "{},{}", name, record.score) {
-        Ok(()) => Ok(()),
-        Err(e) => Err(DataError::Io(e)),
-    }
+    writeln!(file, "{},{}", name, record.score)?;
+    Ok(())
 }
